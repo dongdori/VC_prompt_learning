@@ -47,6 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=str, required = True, default='cpu')
     parser.add_argument('--dataset', type=str, required=True, help='dataset name')
     parser.add_argument('--epoch', type=int, required = True, default=100)
+    parser.add_argument('--layer', default = None, type=int, help = 'layer to feed in visual prompt')
     parser.add_argument('--type', type=str, required=True, default='text')
     parser.add_argument('--division', type=str, required=True, default='entire')
     parser.add_argument('--kshot', type=int, required=True)
@@ -115,6 +116,7 @@ if __name__ == '__main__':
         print(len(testloader))
         for step, pixel in enumerate(testloader):
             logits = model(pixel.type(torch.float32))
+            logits = logits.to(torch.device('cpu'))
             pred = torch.topk(logits, k=args.topk, dim=1).indices
             preds = torch.cat([preds, pred], dim=0)
             if (step+1) % 10:
