@@ -3,7 +3,6 @@ from config import cfg
 import argparse
 import torch
 import numpy as np
-import pandas as pd
 
 if __name__ == '__main__':
     torch.manual_seed(2022)
@@ -15,14 +14,15 @@ if __name__ == '__main__':
     parser.add_argument('--kshot', required=True, type=int)
     parser.add_argument('--start_epoch', required=True, type=int)
     parser.add_argument('--division', required=True, default='base', type=str)
+    parser.add_argument('--layer', required=True, default=0, type=int)
     args = parser.parse_args()
 
     device = torch.device(args.device)
 
     if args.division == 'base':
         # train with only base classes
-        proptim = PromptOptim(cfg, device, args.dataset, args.kshot, args.type , args.start_epoch, only_base=True)
+        proptim = PromptOptim(cfg, device, args.dataset, args.kshot, args.type , args.start_epoch, args.layer, only_base=True)
     else:
         # train with entire classes
-        proptim = PromptOptim(cfg, device, args.dataset, args.kshot, args.type , args.start_epoch, only_base=False)
+        proptim = PromptOptim(cfg, device, args.dataset, args.kshot, args.type , args.start_epoch, args.layer, only_base=False)
     proptim.train()

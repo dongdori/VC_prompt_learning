@@ -51,6 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--division', type=str, required=True, default='entire')
     parser.add_argument('--kshot', type=int, required=True)
     parser.add_argument('--topk', type=int, required=True, default=1)
+    parser.add_argument('--layer', required=True, default=0, type=int)
     args = parser.parse_args()
 
     # set device
@@ -71,27 +72,27 @@ if __name__ == '__main__':
         if args.type == 'text':
             model = PromptLRN(testset.novel_labels, cfg, device)
         elif args.type == 'text+vision':
-            model = VTPromptLRN(testset.novel_labels, cfg, device)
+            model = VTPromptLRN(testset.novel_labels, cfg, args.layer, device)
         elif args.type == 'text+vision_metanet':
-            model = VTMetaPromptLRN(testset.novel_labels, cfg, device)
+            model = VTMetaPromptLRN(testset.novel_labels, cfg, args.layer, device)
     
     # evaluate with base classes(classes used for training)
     elif args.division == 'base':
         if args.type == 'text':
             model = PromptLRN(testset.base_labels, cfg, device)
         elif args.type == 'text+vision':
-            model = VTPromptLRN(testset.base_labels, cfg, device)
+            model = VTPromptLRN(testset.base_labels, cfg, args.layer, device)
         elif args.type == 'text+vision_metanet':
-            model = VTMetaPromptLRN(testset.base_labels, cfg, device)
+            model = VTMetaPromptLRN(testset.base_labels, cfg, args.layer, device)
 
     # evaluate with entire classes(trained with entire classes)
     elif args.division == 'entire':
         if args.type == 'text':
             model = PromptLRN(testset.labels, cfg, device)
         elif args.type == 'text+vision':
-            model = VTPromptLRN(testset.labels, cfg, device)
+            model = VTPromptLRN(testset.labels, cfg, args.layer, device)
         elif args.type == 'text+vision_metanet':
-            model = VTMetaPromptLRN(testset.labels, cfg, device)
+            model = VTMetaPromptLRN(testset.labels, cfg, args.layer, device)
     
     # load trained 
     state_dict = torch.load('./ckpt/{}_promptlearn_{}/{}_shot/model_epoch{}.pt'.format(args.dataset, args.type, args.kshot, args.epoch),
