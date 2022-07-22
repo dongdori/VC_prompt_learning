@@ -11,7 +11,6 @@ if __name__ == '__main__':
     parser.add_argument('--device', required=True, type=str, help = 'cpu, gpu, cuda...')
     parser.add_argument('--dataset', required=True, help='dataset name', type=str)
     parser.add_argument('--type', required=True, default='text', type=str, help = 'one of text | text+vision | text+vision_metanet')
-    parser.add_argument('--layer', default = None, type=int, help = 'layer to feed in visual prompt')
     parser.add_argument('--kshot', required=True, type=int, help = '# of shots for few-shot setting')
     parser.add_argument('--start_epoch', required=True, type=int)
     parser.add_argument('--division', required=True, default='base', type=str)
