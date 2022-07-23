@@ -95,7 +95,7 @@ if __name__ == '__main__':
             model = VTMetaPromptLRN(testset.labels, cfg, args.layer, device)
     
     # load trained 
-    state_dict = torch.load('./ckpt/{}_promptlearn_{}/{}_shot/model_epoch{}.pt'.format(args.dataset, args.type, args.kshot, args.epoch),
+    state_dict = torch.load('./ckpt/{}_promptlearn_{}/{}_shot/layer_{}/model_epoch{}.pt'.format(args.dataset, args.type, args.kshot, args.layer, args.epoch),
                             map_location=device)
     model.load_state_dict(state_dict())
     if device == torch.device('cpu'):

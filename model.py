@@ -173,33 +173,22 @@ class VisualEncoder(nn.Module):
         #else:
         #   self.dtype = torch.float16
     def forward(self, input, prompt = None):
-        if self.concat_layer == 0:
-            '''
-            input : torch.FloatTensor shape of (N, 50+n_ctx, 512)
-            '''
-            x = self.pre_ln(input)
-            x = x.permute(1, 0, 2)
-            x = self.transformer(x)
-            x = x.permute(1, 0, 2)
-            x = self.post_ln(x[:, 0, :]).type(self.dtype) # 16
-            x = x @ self.vision_proj
-        else:
-            '''
-            input : torch.FloatTensor shape of (N, 50, 512)
-            '''
-            x = self.pre_ln(input)
-            x = x.permute(1, 0, 2)
-            for i in range(self.transformer.layers):
-                #If concat_layer is higher than the layers that exist in this transformer, nothing happens!
-                if i == self.concat_layer:
-                    x = torch.cat([x[:,:1,:], prompt, x[:,1:,:]], dim=1)
-                    x = self.transformer.resblocks[i](x)
-                    x = torch.cat([x[:,:1,:], x[:,1+self.ctx_len:,:]], dim=1)
-                else:
-                    x = self.transformer.resblocks[i](x)
-            x = x.permute(1, 0, 2)
-            x = self.post_ln(x[:, 0, :]).type(self.dtype) # 16
-            x = x @ self.vision_proj
+        '''
+        input : torch.FloatTensor shape of (N, 50, 512)
+        '''
+        x = self.pre_ln(input)
+        x = x.permute(1, 0, 2)
+        for i in range(self.transformer.layers):
+            #If concat_layer is higher than the layers that exist in this transformer, nothing happens!
+            if i == self.concat_layer:
+                x = torch.cat([x[:1,:,:], prompt.permute(1,0,2), x[1:,:,:]], dim=0)
+                x = self.transformer.resblocks[i](x)
+                x = torch.cat([x[:1,:,:], x[1+self.ctx_len:,:,:]], dim=0)
+            else:
+                x = self.transformer.resblocks[i](x)
+        x = x.permute(1, 0, 2)
+        x = self.post_ln(x[:, 0, :]).type(self.dtype) # 16
+        x = x @ self.vision_proj
         return x
 
 class VisualEncoder_int(nn.Module):
@@ -315,6 +304,7 @@ class VTPromptLRN(nn.Module):
         x = torch.cat([self.cls_embedding.repeat(batch_size,1,1).type(self.dtype), x], dim=1) # 16 (batch_size, 50, h_dim)
         x = x + self.pos_embedding.type(self.dtype) # (N,L,D)
 
+        v_prompt = self.v_prompt_emb.repeat(batch_size,1,1)
         img_f = self.img_enc(x, v_prompt)
         
         img_f = img_f / img_f.norm(dim=-1, keepdim=True)
@@ -513,9 +503,9 @@ class PromptOptim(object):
         self.lr_sched = ConstantWarmupScheduler(self.optimizer, scheduler, self.cfg.train.warmup_epoch, self.cfg.train.base_lr)
         # load pretrained model / optimizer / lr_scheduler
         if start_epoch > 5:
-            self.model.load_state_dict(torch.load('ckpt/{}_promptlearn_{}/{}_shot/model_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.start_epoch))())
-            # self.optimizer.load_state_dict(torch.load('ckpt/{}_promptlearn_{}/{}_shot/optimizer_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.start_epoch)))
-            self.lr_sched.load_state_dict(torch.load('ckpt/{}_promptlearn_{}/{}_shot/optimizer_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.start_epoch))())
+            self.model.load_state_dict(torch.load('ckpt/{}_promptlearn_{}/{}_shot/layer_{}/model_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.concat_layer, self.start_epoch))())
+            # self.optimizer.load_state_dict(torch.load('ckpt/{}_promptlearn_{}/{}_shot/layer_{}/optimizer_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.concat_layer, self.start_epoch)))
+            self.lr_sched.load_state_dict(torch.load('ckpt/{}_promptlearn_{}/{}_shot/layer_{}/optimizer_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.concat_layer, self.start_epoch))())
 
         # set loss function
         self.criterion = nn.CrossEntropyLoss()
@@ -551,9 +541,9 @@ class PromptOptim(object):
             if (epoch+1)%50 == 0:
                 if self.val:
                     val_acc(self.model, self.device, self.dataset, 1)
-                if not os.path.exists('./ckpt/{}_promptlearn_{}/{}_shot/'.format(self.dataset, self.type, self.kshot)):
-                    os.makedirs('./ckpt/{}_promptlearn_{}/{}_shot/'.format(self.dataset, self.type, self.kshot))
-                torch.save(self.model.state_dict, './ckpt/{}_promptlearn_{}/{}_shot/model_epoch{}.pt'.format(self.dataset, self.type, self.kshot, epoch+1))
-                torch.save(self.optimizer.state_dict, './ckpt/{}_promptlearn_{}/{}_shot/optimizer_epoch{}.pt'.format(self.dataset, self.type, self.kshot, epoch+1))
-                torch.save(self.lr_sched.state_dict, './ckpt/{}_promptlearn_{}/{}_shot/lrsched_epoch{}.pt'.format(self.dataset, self.type, self.kshot, epoch+1)) 
+                if not os.path.exists('./ckpt/{}_promptlearn_{}/{}_shot/layer_{}/'.format(self.dataset, self.type, self.kshot, self.concat_layer)):
+                    os.makedirs('./ckpt/{}_promptlearn_{}/{}_shot/layer_{}/'.format(self.dataset, self.type, self.kshot, self.concat_layer))
+                torch.save(self.model.state_dict, './ckpt/{}_promptlearn_{}/{}_shot/layer_{}/model_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.concat_layer, epoch+1))
+                torch.save(self.optimizer.state_dict, './ckpt/{}_promptlearn_{}/{}_shot/layer_{}/optimizer_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.concat_layer, epoch+1))
+                torch.save(self.lr_sched.state_dict, './ckpt/{}_promptlearn_{}/{}_shot/layer_{}/lrsched_epoch{}.pt'.format(self.dataset, self.type, self.kshot, self.concat_layer, epoch+1)) 
                 print('checkpoint saved')
