@@ -1,6 +1,7 @@
 import os
 import collections
 from collections import OrderedDict
+from secrets import token_bytes
 from signal import raise_signal
 
 import torch
@@ -59,23 +60,17 @@ class TextEncoder(nn.Module):
         self.transformers = clipmodel.transformer
         self.ln_final = clipmodel.ln_final
         self.text_proj = clipmodel.text_projection
-
-        # set dtype
-        if device == torch.device('cpu') or torch.device('mps'):
-            self.dtype = torch.float32
-        else:
-            self.dtype = torch.float16
     
     def forward(self, prompt, token_id):
         '''
         prompt : torch.FloatTensor shape of NxLxD
         prompt_tokenized : torch.LongTensor shape of NxL
         '''
-        x = prompt + self.pos_embedding.type(self.dtype)
+        x = prompt + self.pos_embedding
         x = x.permute(1, 0, 2)  # NLD -> LND
         x = self.transformers(x)
         x = x.permute(1, 0, 2) # LND -> NLD
-        x = self.ln_final(x).type(self.dtype)
+        x = self.ln_final(x)
         '''
         mps 미구현 수정
         '''
@@ -83,7 +78,6 @@ class TextEncoder(nn.Module):
         token_id = token_id.to(torch.device('cpu'))
         x = x[torch.arange(x.shape[0]), token_id.argmax(dim=-1)]
         x = x.to(torch.device('mps'))
-        token_id = token_id.to(torch.device('mps'))
         x = x @ self.text_proj
         '''
         '''
@@ -160,11 +154,6 @@ class VisualEncoder(nn.Module):
         self.post_ln = clipmodel.visual.ln_post
         self.vision_proj = clipmodel.visual.proj
 
-        if device == torch.device('cpu') or torch.device("mps"):
-            self.dtype = torch.float32
-        else:
-           self.dtype = torch.float16
-
     def forward(self, prompt):
         '''
         prompt : torch.FloatTensor shape of (N, 50+n_ctx, 512)
@@ -173,7 +162,7 @@ class VisualEncoder(nn.Module):
         x = x.permute(1, 0, 2)
         x = self.transformer(x)
         x = x.permute(1, 0, 2)
-        x = self.post_ln(x[:, 0, :]).type(self.dtype) # 16
+        x = self.post_ln(x[:, 0, :])
         x = x @ self.vision_proj
         return x
 
@@ -185,15 +174,11 @@ class VisualEncoder_int(nn.Module):
         self.pre_ln = clipmodel.visual.ln_pre
         self.transformer_1 = clipmodel.visual.transformer.resblocks[:L]
         self.transformer_2 = clipmodel.visual.transformer.resblocks[L:L+dim]
-        self.transformer_3 = clipmodel.visual.transformer.resblocks[L+dim:]
+        # self.transformer_3 = clipmodel.visual.transformer.resblocks[L+dim:]
         self.post_ln = clipmodel.visual.ln_post
         self.vision_proj = clipmodel.visual.proj
         self.num_layers = 12 # encoder layer
         self.num_tokens = 1 # token_#
-        if device == torch.device('cpu') or torch.device('mps'):
-            self.dtype = torch.float32
-        else:
-           self.dtype = torch.float16
            
     def forward(self, x, prompt):
         '''
@@ -212,10 +197,12 @@ class VisualEncoder_int(nn.Module):
             x = x.permute(1, 0, 2)
             x = self.transformer_2[i](x)
             x = x.permute(1, 0, 2)
+        '''
         x = x.permute(1, 0, 2)
         x = self.transformer_3(x)
         x = x.permute(1, 0, 2)
-        x = self.post_ln(x[:, 0, :]).type(self.dtype) # 16
+        '''
+        x = self.post_ln(x[:, 0, :])
         x = x @ self.vision_proj
         return x
 
@@ -244,9 +231,9 @@ class VTPromptLRN(nn.Module):
         self.text_enc = TextEncoder(cfg, device)
     
         # vision encoder
-        self.patch_embedding = clipmodel.visual.conv1.to(self.device)
-        self.pos_embedding = clipmodel.visual.positional_embedding.to(self.device)
-        self.cls_embedding = clipmodel.visual.class_embedding.to(self.device)
+        self.patch_embedding = clipmodel.visual.conv1
+        self.pos_embedding = clipmodel.visual.positional_embedding
+        self.cls_embedding = clipmodel.visual.class_embedding
         self.img_enc = VisualEncoder(cfg, device)
 
         self.logit_scale = clipmodel.logit_scale
@@ -269,7 +256,7 @@ class VTPromptLRN(nn.Module):
         prompts = [prompt_prefix + " " + name + "." for name in classnames]
         self.prompts_tokenized = clip.tokenize(prompts).to(self.device)
         with torch.no_grad():
-            embedding = self.token_embedding(self.prompts_tokenized).type(self.dtype)
+            embedding = self.token_embedding(self.prompts_tokenized)
         
         ## extract [SOS] word embedding & [CLASS],[EOS] word embedding
         self.sos_emb = embedding[:,:1,:] # n_cls x 1 x h_dim
@@ -404,7 +391,6 @@ class VTMetaPromptLRN(nn.Module):
         pixel_values = self.transforms_clip(img).to(self.device).type(self.dtype)
         pixel_values_meta = self.transforms_meta(img).to(self.device).type(self.dtype)
         batch_size = pixel_values.shape[0]
-
         # forward propagate class features
         context = self.prompt_emb.repeat(self.n_cls, 1,1)
         prefix = self.sos_emb
@@ -453,6 +439,12 @@ class PromptOptim(object):
         self.start_epoch = start_epoch
         self.device = device
         self.val = val
+        if self.device == torch.device('cpu') or torch.device('mps'):
+            self.dtype = torch.float32
+        else:
+            self.dtype = torch.float16
+
+
         # set dataloader
         if only_base:
             self.dataloader = torch.utils.data.DataLoader(UnseenDataset(dataset=dataset,
@@ -488,15 +480,10 @@ class PromptOptim(object):
                 self.model = VTPromptLRN(self.dataloader.dataset.labels, cfg, device, L, dim)
             elif type == 'text+vision_metanet':
                 self.model = VTMetaPromptLRN(self.dataloader.dataset.labels, cfg, device, L, dim)
-        self.model.to(device)
-
-        #if self.device == torch.device('cpu'):
-        self.model = self.model.type(torch.float32)
-        # freeze weight
+        
         for n, param in self.model.named_parameters():
             if ('meta_net.meta_linear' not in n) and ('prompt' not in n):
                 param.requires_grad = False
-
         # set optimizer & lr scheduler
         self.optimizer = Adam(self.model.parameters(), lr=self.cfg.train.max_lr)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
