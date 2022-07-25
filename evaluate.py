@@ -73,7 +73,7 @@ if __name__ == '__main__':
         if args.type == 'text':
             model = PromptLRN(testset.novel_labels, cfg, device)
         elif args.type == 'text+vision':
-            model = VTPromptLRN(testset.novel_labels, cfg, device, args.layer)
+            model = VTPromptLRN(testset.novel_labels, cfg, device, args.layer, args.dim)
         elif args.type == 'text+vision_metanet':
             model = VTMetaPromptLRN(testset.novel_labels, cfg, device, args.layer, args.dim)
     
@@ -82,7 +82,7 @@ if __name__ == '__main__':
         if args.type == 'text':
             model = PromptLRN(testset.base_labels, cfg, device)
         elif args.type == 'text+vision':
-            model = VTPromptLRN(testset.base_labels, cfg, device, args.layer)
+            model = VTPromptLRN(testset.base_labels, cfg, device, args.layer, args.dim)
         elif args.type == 'text+vision_metanet':
             model = VTMetaPromptLRN(testset.base_labels, cfg, device, args.layer, args.dim)
 

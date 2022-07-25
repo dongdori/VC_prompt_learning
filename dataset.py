@@ -84,7 +84,6 @@ class UnseenDataset(data.Dataset):
         # subsampling
         if self.train=='train':
             self.df = self.df.groupby('labels').sample(n=self.k_shot, random_state=2022)
-
         # divide base classes and novel classes
         self.divide()
         

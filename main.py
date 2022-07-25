@@ -4,10 +4,19 @@ import argparse
 import torch
 import numpy as np
 import pandas as pd
+import random
 
 if __name__ == '__main__':
-    torch.manual_seed(2022)
-    np.random.seed(2022)
+    seed = 2022
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    np.random.seed(seed)  # Numpy module.
+    random.seed(seed)  # Python random module.
+    torch.manual_seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', required=True, type=str, help = 'cpu, gpu, cuda...')
     parser.add_argument('--dataset', required=True, help='dataset name', type=str)
@@ -25,5 +34,5 @@ if __name__ == '__main__':
         proptim = PromptOptim(cfg, device, args.layer, args.dim, args.dataset, args.kshot, args.type , args.start_epoch, only_base=True)
     else:
         # train with entire classes
-        proptim = PromptOptim(cfg, device, args.layer,  args.dataset, args.kshot, args.type , args.start_epoch, only_base=False)
+        proptim = PromptOptim(cfg, device, args.layer, args.dim, args.dataset, args.kshot, args.type , args.start_epoch, only_base=False)
     proptim.train()
